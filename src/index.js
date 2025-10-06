@@ -61,4 +61,21 @@ app.get('/api/me', async (c) => {
   });
 });
 
+// === API 端点 4: 登出 ===
+app.post('/api/auth/logout', async (c) => {
+  // 从 context 取得 supabase client
+  const supabase = c.get('supabase');
+  
+  // 呼叫 Supabase 的 signOut 方法
+  // 这会让使用者的 session 失效
+  const { error } = await supabase.auth.signOut();
+
+  if (error) {
+    return c.json({ error: error.message }, 500);
+  }
+
+  // 回传成功讯息
+  return c.json({ message: 'Successfully logged out' });
+});
+
 export default app;

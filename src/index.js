@@ -38,7 +38,7 @@ app.get('/api/auth/callback', async (c) => {
   }
   
   // 這裡可以改成你們前端應用的實際網址
-  return c.redirect('http://localhost:3000/dashboard'); 
+  return c.redirect('https://our-task-app.pages.dev/dashboard');
 });
 
 // API 端點 3: 取得當前登入者的資訊 (受保護的路由)

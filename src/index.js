@@ -45,20 +45,15 @@ app.get('/api/auth/callback', async (c) => {
 // 明确地从 Hono Context 中传递 env 和 headers
 app.get('/api/me', async (c) => {
   try {
-    // 从 Context 中取得环境变量，这是在 Worker 中最稳妥的方式
     const { SUPABASE_URL, SUPABASE_ANON_KEY } = c.env;
-    
-    // 从 Context 中取得请求标头
     const authorization = c.req.header('Authorization');
     
-    // 建立 Supabase Client
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: {
         headers: { Authorization: authorization },
       },
     });
 
-    // 取得使用者资讯
     const { data: { user }, error } = await supabase.auth.getUser();
     
     if (error || !user) {
@@ -77,17 +72,14 @@ app.get('/api/me', async (c) => {
 });
 
 // === API 端点 4: 登出 (修正版) ===
-// 采用与 /api/me 完全相同的「手动机」来确保一致性
 app.post('/api/auth/logout', async (c) => {
   try {
-    // 建立一个「带有身份」的 client，就像 /api/me 一样
     const supabase = createClient(c.env.SUPABASE_URL, c.env.SUPABASE_ANON_KEY, {
       global: {
         headers: { Authorization: c.req.header('Authorization') },
       },
     });
 
-    // 用这个带有身份的 client 来执行登出
     const { error } = await supabase.auth.signOut();
 
     if (error) {
@@ -100,6 +92,52 @@ app.post('/api/auth/logout', async (c) => {
   } catch (e) {
     console.error('Logout endpoint crashed:', e);
     return c.json({ error: 'An unexpected error occurred' }, 500);
+  }
+});
+
+// === API 端点 5: 呼叫 Supabase Edge Function 来执行 "new_exercise" ===
+app.post('/api/exercise', async (c) => {
+  try {
+    // 1. 取得 Supabase Client 并验证使用者身份
+    const supabase = createClient(c.env.SUPABASE_URL, c.env.SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: c.req.header('Authorization') } },
+    });
+    const { data: { user } } = await supabase.auth.getUser();
+
+    // 如果验证失败，就提早退出
+    if (!user) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+
+    // 2. 从前端请求中取得运动相关的资料
+    const body = await c.req.json();
+    const { startTime, endTime, description } = body;
+    if (!startTime || !endTime) {
+      return c.json({ error: 'Start time and end time are required.' }, 400);
+    }
+
+    // 3. 呼叫 Supabase Edge Function (这是新的部分！)
+    // Supabase SDK 提供了 .functions.invoke() 方法来做这件事
+    const { data, error } = await supabase.functions.invoke('new-exercise', {
+      body: {
+        start_time: startTime,
+        end_time: endTime,
+        description: description,
+        user_id: user.id, // 把验证过的 user.id 传给 Edge Function
+      },
+    });
+
+    if (error) {
+      console.error('Edge Function invoke error:', error);
+      return c.json({ error: 'Failed to invoke exercise function.', details: error.message }, 500);
+    }
+
+    // 4. 将 Edge Function 的回传结果，再转传给前端
+    return c.json(data);
+
+  } catch (e) {
+    console.error('/api/exercise endpoint crashed:', e);
+    return c.json({ error: 'An unexpected server error occurred.' }, 500);
   }
 });
 

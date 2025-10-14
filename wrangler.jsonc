@@ -4,7 +4,7 @@
  */
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "shrill-bird-6f6a",
+	"name": "petsrunner",
 	"main": "src/index.js",
 	"compatibility_date": "2025-10-04",
 	"observability": {
